@@ -2,12 +2,14 @@
 import torch
 import os
 from PIL import Image
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, Subset
 import torchvision
 from torchvision import transforms
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import precision_score, recall_score, f1_score
 
 #constants
-num_epochs = 30
+num_epochs = 11
 
 #could replace classes with nn.Sequential
 class ConvolutionalBlock(torch.nn.Module):
@@ -72,9 +74,10 @@ class SiameseNetwork(torch.nn.Module):
 #https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
 
 #constants
-dataset_dir = "C:\\Users\\charl\\Desktop\\industrial project\\pose-classification\\data\\yoga82\\skeletons"
-batch_size = 32 
+#dataset_dir = "C:\\Users\\charl\\Desktop\\industrial project\\pose-classification\\data\\yoga82\\skeletons"
+dataset_dir = "/workspace/data/yoga82/skeletons"
 
+batch_size = 32 
 
 def get_mean_and_std(dataloader):
     channels_sum, channels_squared_sum, num_batches = 0, 0, 0
@@ -116,21 +119,45 @@ def main():
             root=dataset_dir, transform=transform_img
             )
     
+    # Get the targets (labels) of your dataset
+    targets = normalized_dataset.targets
 
+    # Create stratified split
+    #70% train, 30% temp
+    train_idx, temp_idx = train_test_split(list(range(len(normalized_dataset))), test_size=0.3, stratify=targets)
+    #15% validation, 15% test
+    valid_idx, test_idx = train_test_split(temp_idx, test_size=0.5, stratify=[targets[i] for i in temp_idx])
+
+    # Create data subsets
+    train_data = Subset(normalized_dataset, train_idx)
+    valid_data = Subset(normalized_dataset, valid_idx)
+    test_data = Subset(normalized_dataset, test_idx)
+
+    # Create data loaders
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size, shuffle=True)
+    valid_loader = torch.utils.data.DataLoader(valid_data, batch_size, shuffle=True)
+    test_loader = torch.utils.data.DataLoader(test_data, batch_size, shuffle=True)
     #check whats used in the paper
     #clarify num_workers parameter
-    normalized_data_loader = DataLoader(normalized_dataset, batch_size,shuffle=True, num_workers=4)
-    model = SiameseNetwork(3)
 
+    cross_entropy_loss = torch.nn.CrossEntropyLoss()
+    
+    training_losses = []
+    validation_losses = []
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")   
+    model = SiameseNetwork(3).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-
-    losses = []
     for epoch in range(num_epochs):
-        for images,labels in normalized_data_loader:
+        epoch_loss_train = 0
+        for images,labels in train_loader:
+            images = images.to(device)
+            labels = labels.to(device)
+
+
             # y_linear1, y_linear2, y_linear3 = model(images)
             y_linear1 = model(images)
 
-            cross_entropy_loss = torch.nn.CrossEntropyLoss()
             # cosine_embedding_loss = torch.nn.CosineEmbeddingLoss()
                                 
             # loss = cross_entropy_loss(y_linear1, labels) + cosine_embedding_loss(y_linear2,y_linear3) #finish this, test on yoga 82 with yolov7-COCO
@@ -139,10 +166,60 @@ def main():
         
             optimizer.step()
             optimizer.zero_grad()
+            epoch_loss_train += loss.item()
 
-            losses.append(loss)
-  
-  
+        epoch_loss_val = 0
+
+        model.eval()
+        with torch.no_grad():
+            for images, labels in valid_loader:
+                images = images.to(device)
+                labels = labels.to(device)
+
+                output = model(images)
+                loss = cross_entropy_loss(output, labels)
+                epoch_loss_val += loss.item()
+
+        model.train()
+        training_losses.append(epoch_loss_train)
+        validation_losses.append(epoch_loss_val)
+
+    print(training_losses)
+    print(validation_losses)
+    
+
+    correct_predictions = 0
+    total_predictions = 0
+    all_labels = []
+    all_predictions = []
+
+    testing_loss = 0
+    model.eval()
+    with torch.no_grad():
+        for images, labels in test_loader:
+            images = images.to(device)
+            labels = labels.to(device)
+
+            output = model(images)
+            loss = cross_entropy_loss(output, labels)
+            testing_loss += loss.item()
+
+            _, preds = torch.max(output, 1)
+
+            all_labels.extend(labels.tolist())
+            all_predictions.extend(preds.tolist())
+
+            total_predictions += labels.size(0)
+            correct_predictions += (preds == labels).sum().item()
+    accuracy = correct_predictions / total_predictions
+    precision = precision_score(all_labels, all_predictions, average='weighted')
+    recall = recall_score(all_labels, all_predictions, average='weighted')
+    f1 = f1_score(all_labels, all_predictions, average='weighted')
+
+    print('Test Accuracy: ', accuracy)
+    print('Precision: ', precision)
+    print('Recall: ', recall)
+    print('F1 score: ', f1)
 
 
 if __name__ == "__main__":
