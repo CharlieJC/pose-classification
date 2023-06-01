@@ -6,7 +6,9 @@ from torch.utils.data import Dataset, DataLoader, Subset
 import torchvision
 from torchvision import transforms
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import precision_score, recall_score, f1_score
+from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix
+import json
+
 
 #constants
 num_epochs = 11
@@ -37,7 +39,7 @@ class Attention(torch.nn.Module):
         y = self.seq(x)
         y = y.view(y.shape[0], -1, 1, 1) # reshape for broadcasting multiplication
         return x * y
-        
+
 
 class Branch(torch.nn.Module):
     def __init__(self):
@@ -68,14 +70,14 @@ class SiameseNetwork(torch.nn.Module):
         # linear2_out = self.linear2(branch1_out)
         # linear3_out = self.linear2(branch2_out)
         return linear1_out
-        
-        
-#https://pytorch.org/docs/stable/generated/torch.nn.CosineEmbeddingLoss.html
-#https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
+
+
+# https://pytorch.org/docs/stable/generated/torch.nn.CosineEmbeddingLoss.html
+# https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
 
 #constants
 #dataset_dir = "C:\\Users\\charl\\Desktop\\industrial project\\pose-classification\\data\\yoga82\\skeletons"
-dataset_dir = "/workspace/data/yoga82/skeletons"
+dataset_dir = "/workspace/data/synthetic/skeletons"
 
 batch_size = 32 
 
@@ -97,7 +99,7 @@ def get_mean_and_std(dataloader):
 
 
 
-#https://towardsdatascience.com/how-to-calculate-the-mean-and-standard-deviation-normalizing-datasets-in-pytorch-704bd7d05f4c
+# https://towardsdatascience.com/how-to-calculate-the-mean-and-standard-deviation-normalizing-datasets-in-pytorch-704bd7d05f4c
 
 
 
@@ -220,6 +222,18 @@ def main():
     print('Precision: ', precision)
     print('Recall: ', recall)
     print('F1 score: ', f1)
+   
+    conf_mat = confusion_matrix(all_labels, all_predictions)
+    print(conf_mat)
+    torch.save(model.state_dict(), 'pose_classify.pt')
+    print(dataset.class_to_idx)
+    mean_std = {
+        'mean': mean.tolist(),  # if mean is a tensor
+        'std': std.tolist()     # if std is a tensor
+    }
+
+    with open('mean_std.json', 'w') as f:
+        json.dump(mean_std, f)
 
 
 if __name__ == "__main__":

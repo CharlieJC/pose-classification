@@ -78,7 +78,7 @@ def pose_images(filename, model):
 import os
 #directory_ = "/workspace/data/yoga82/download/Cobra_Pose_or_Bhujangasana_"
 
-image_extension = ".jpg"
+image_extension = ".png"
 model = load_model()
 def img_to_pose(img_file, model):
     images = pose_images(img_file, model)
@@ -116,8 +116,8 @@ def img_to_pose_dir(directory, model):
 
 # +
 def main():
-    poses = ["Cobra_Pose_or_Bhujangasana_","Cat_Cow_Pose_or_Marjaryasana_", "Extended_Revolved_Side_Angle_Pose_or_Utthita_Parsvakonasana_", "Extended_Revolved_Triangle_Pose_or_Utthita_Trikonasana_"]
-    directory = "/workspace/data/yoga82/download/"
+    poses = ["lying","kneeling", "standing"]
+    directory = "/workspace/data/synthetic/"
     directories = [(directory + pose) for pose in poses]
     for directory in directories:
         print("Creating skeletons for: " + directory)
