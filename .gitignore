@@ -1,3 +1,6 @@
 data/*
 yolov7/scripts/coco/*
 yolov7/yolov7-w6-pose.pt
+classify/standing/*
+classify/lying/*
+classify/kneeling/*
